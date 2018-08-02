@@ -28,5 +28,6 @@ using namespace cv;
 using namespace std;
 
 int trans_2D(string path);
+Mat image_cut(Mat src);
 
 #endif /* Transformation_to_2D_hpp */

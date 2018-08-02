@@ -12,6 +12,7 @@
  */
 #include "Transformation_to_2D.hpp"
 
+
 int trans_2D(string path){
     // Create a new image
     int rows = 720;
@@ -138,3 +139,23 @@ int trans_2D(string path){
     cout << count <<"origin"<<endl;
     return 0;
 }
+
+Mat image_cut(Mat src){
+    int rows = src.rows;
+    int cols = src.cols;
+    cv::Mat temp = src(cv::Rect(0,0,rows,cols/2));
+    cv::Mat temp2 =src(Range(0,rows),Range(cols/2,cols));
+    string out_path= "/Users/estelle/Project/3DFaceReconstruction/temp1.png";
+    string out_path2="/Users/estelle/Project/3DFaceReconstruction/temp2.png";
+    imwrite(out_path, temp);
+    imwrite(out_path2,temp2);
+    Mat result;
+    
+    Mat mask = imread(out_path);
+    Mat mask2 = imread(out_path2);
+    hconcat(mask2,mask,result);
+    
+    return result;
+}
+
+
