@@ -75,68 +75,69 @@ int recons_3D(string path){
 
 //    Mat temp_img = imread("/Users/estelle/Documents/faceFitResult/2D_Transformation/resolution_map.png",CV_LOAD_IMAGE_UNCHANGED);
 //    change_resolution(temp_img);
-    Mat img = imread("/Users/estelle/Documents/faceFitResult/2D_Transformation/depth_map.png",CV_LOAD_IMAGE_UNCHANGED);
+    //Mat img = imread("/Users/estelle/Documents/faceFitResult/2D_Transformation/depth_map.png",CV_LOAD_IMAGE_UNCHANGED);
     //Mat img = out_image.clone();
-    
-    int new_rows = img.rows;
-    int new_cols = img.cols;
-    for (int i = 0; i<new_rows;i++){
-        int startPoint=-1;  //depth info
-        int endPoint = -1;
-        int startcols = -1;  //position
-        int endcols = -1;
-
-        for (int j = 0;j <new_cols;j++){
-            unsigned short int start = (unsigned short int)img.at<ushort>(i,j);
-            if(start != 0){
-                startPoint = start;
-                startcols = j;
-                for (int x=new_cols-1;x>=j;x--){
-                    unsigned short int end = (unsigned short int) img.at<ushort>(i,x);
-                    if (end != 0){
-                        endPoint = end;
-                        endcols = x;
-                        break;
-                    }
-                }
-                break;
-            }
-        }
-        double distToOrigin = 7;
-        int step = startcols+new_cols-endcols;
-        double step_size =(double) (endPoint-startPoint)/step;
-        if (startcols == endcols || startcols == -1) continue;
-        else{
-            for (int m=0;m<=startcols;m++){
-                int distance = startcols-m;
-                double step_index=distance*step_size + startPoint;
-                double radius = sqrt(step_index*step_index+distToOrigin*distToOrigin-2*distToOrigin*step_index*cos((180-m)/pi));
-                img.at<ushort>(i,m) = radius;
-            }
-
-            for (int n=new_cols-1;n>=endcols;n--){
-                int distance = startcols+new_cols-n;
-                double step_index=distance*step_size + startPoint;
-                double radius = sqrt(step_index*step_index+distToOrigin*distToOrigin-2*distToOrigin*step_index*cos((180-n)/pi));
-                img.at<ushort>(i,n) = radius;
-            }
-        }
-    }
+//
+//    int new_rows = img.rows;
+//    int new_cols = img.cols;
+//    for (int i = 0; i<new_rows;i++){
+//        int startPoint=-1;  //depth info
+//        int endPoint = -1;
+//        int startcols = -1;  //position
+//        int endcols = -1;
+//
+//        for (int j = 0;j <new_cols;j++){
+//            unsigned short int start = (unsigned short int)img.at<ushort>(i,j);
+//            if(start != 0){
+//                startPoint = start;
+//                startcols = j;
+//                for (int x=new_cols-1;x>=j;x--){
+//                    unsigned short int end = (unsigned short int) img.at<ushort>(i,x);
+//                    if (end != 0){
+//                        endPoint = end;
+//                        endcols = x;
+//                        break;
+//                    }
+//                }
+//                break;
+//            }
+//        }
+//        double distToOrigin = 7;
+//        int step = startcols+new_cols-endcols;
+//        double step_size =(double) (endPoint-startPoint)/step;
+//        if (startcols == endcols || startcols == -1) continue;
+//        else{
+//            for (int m=0;m<=startcols;m++){
+//                int distance = startcols-m;
+//                double step_index=distance*step_size + startPoint;
+//                double radius = sqrt(step_index*step_index+distToOrigin*distToOrigin-2*distToOrigin*step_index*cos((180-m)/pi));
+//                img.at<ushort>(i,m) = radius;
+//            }
+//
+//            for (int n=new_cols-1;n>=endcols;n--){
+//                int distance = startcols+new_cols-n;
+//                double step_index=distance*step_size + startPoint;
+//                double radius = sqrt(step_index*step_index+distToOrigin*distToOrigin-2*distToOrigin*step_index*cos((180-n)/pi));
+//                img.at<ushort>(i,n) = radius;
+//            }
+//        }
+//    }
 
     
     // Image Filter
 
-    img = image_filter(img,5,1);
+    //img = image_filter(img,5,1);
 //    img = image_filter(img,5,2);
 //    img = image_filter(img,5,2);
-//    img = image_filter(img,5,1);
-//      img = full_image_filter(img,5,1);
+      out_image = image_filter(out_image,5,1);
+      out_image = image_filter(out_image,5,1);
+      //out_image = full_image_filter(out_image,5,1);
 //    Mat src = img.clone();
 //    GaussianBlur(src, img, Size(3,3), 1);
     
     namedWindow("Display Window", WINDOW_AUTOSIZE);
     imshow("Display Window", out_image);
-    imwrite(path, img);
+    imwrite(path, out_image);
     
     trans_3D(path);
     return 0;

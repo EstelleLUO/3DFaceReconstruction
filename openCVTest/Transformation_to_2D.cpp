@@ -133,7 +133,8 @@ int trans_2D(string path){
     // Save Image
     namedWindow("Display Window", WINDOW_AUTOSIZE);
     imshow("Display Window", image);
-    imwrite("/Users/estelle/Documents/faceFitResult/2D_Transformation/depth_map.png", image);
+    imwrite("/Users/estelle/Project/3DFaceReconstruction/gradient_test.png", image);
+    //imwrite("/Users/estelle/Project/3DFaceReconstruction/depth_map.png", image);
     //waitKey(0);
     //destroyAllWindows();
     cout << count <<"origin"<<endl;
