@@ -39,39 +39,39 @@ using namespace std;
 //    return 0;
 //}
 
-//int main() {
-//    string path = "/Users/estelle/Project/3DFaceReconstruction/merge3d_John.txt";
-//    string out_path ="/Users/estelle/Project/3DFaceReconstruction/gradient_test.png";
-//    string result_path ="/Users/estelle/Project/3DFaceReconstruction/gradient_test_result.png";
-//    trans_2D(path);
-//    recons_3D(out_path);
-//    Mat src = imread(out_path);
-//    src = image_cut(src);
-//    imwrite(result_path, src);
-//
-//    Mat grad_x, grad_y;
-//    Mat abs_grad_x,abs_grad_y;
-//    Mat grad;
-//    int scale = 1;
-//    int delta = 0;
-//    int ddepth = CV_16U;
-//
-//
-//    Scharr( src, grad_x, ddepth, 1, 0, scale, delta, BORDER_DEFAULT );
-//    convertScaleAbs( grad_x, abs_grad_x );
-//
-//    Scharr( src, grad_y, ddepth, 0, 1, scale, delta, BORDER_DEFAULT );
-//    convertScaleAbs( grad_y, abs_grad_y );
-//
-//    addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad );
-//
-//    imshow("grad window", grad );
-//    
-//    waitKey(0);
-//
-//
-//    return 0;
-//}
+int main() {
+    string path = "/Users/estelle/Project/3DFaceReconstruction/merge3d_John.txt";
+    string out_path ="/Users/estelle/Project/3DFaceReconstruction/gradient_test.png";
+    string result_path ="/Users/estelle/Project/3DFaceReconstruction/gradient_test_result.png";
+    trans_2D(path);
+    recons_3D(out_path);
+    Mat src = imread(out_path);
+    src = image_cut(src);
+    imwrite(result_path, src);
+
+    Mat grad_x, grad_y;
+    Mat abs_grad_x,abs_grad_y;
+    Mat grad;
+    int scale = 1;
+    int delta = 0;
+    int ddepth = CV_16U;
+
+
+    Scharr( src, grad_x, ddepth, 1, 0, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( grad_x, abs_grad_x );
+
+    Scharr( src, grad_y, ddepth, 0, 1, scale, delta, BORDER_DEFAULT );
+    convertScaleAbs( grad_y, abs_grad_y );
+
+    addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad );
+
+    imshow("grad window", grad );
+    
+    waitKey(0);
+
+
+    return 0;
+}
 
 /*
 int main(){
