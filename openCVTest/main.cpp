@@ -1,138 +1,222 @@
-//
-//  main.cpp
-//  openCVTest
-//
-//  Created by Estelle on 13/01/2018.
-//  Copyright © 2018 Estelle. All rights reserved.
-//
-
-#include <iostream>
-#include <opencv2/opencv.hpp>
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "opencv2/core/core.hpp"
-#include "opencv2/video/video.hpp"
-#include "opencv2/imgcodecs/imgcodecs.hpp"
+
+#include <iostream>
+#include <string>
+
+#include "utils.hpp"
+using namespace std;
 using namespace cv;
 
-#include <fstream>
-#include <string>
-#include <sstream>
-#include <stdio.h>
-#include "math.h"
-#define w 400
-#include "Data_Analysis.hpp"
-#include "Reconstruction_to_3D.hpp"
-#include "Transformation_to_2D.hpp"
-#include "image_info.hpp"
-#include "Reconstruction_of_mesh.hpp"
-#include "Image_filter.hpp"
-#include "Image_filter.hpp"
-#include "CutandMerge.hpp"
-using namespace std;
+/*
+ * Note: This program uses C assert() statements, define NDEBUG marco to
+ * disable assertions.
+ */
 
-//int main() {
-//    string path = "/Users/estelle/Documents/faceFitResult/2D_Transformation/merge3d_John.txt";
-//    string out_path ="/Users/estelle/Documents/faceFitResult/2D_Transformation/depth_map.png";
-//    trans_2D(path);
-//    //recons_3D(out_path);
-//    return 0;
-//}
+/* Inpainting*/
+#ifndef DEBUG
+#define DEBUG 0
+#endif
 
-int main() {
-    string path = "/Users/estelle/Project/3DFaceReconstruction/merge3d_John.txt";
-    string out_path ="/Users/estelle/Project/3DFaceReconstruction/gradient_test.png";
-    string result_path ="/Users/estelle/Project/3DFaceReconstruction/gradient_test_result.png";
-    trans_2D(path);
-    recons_3D(out_path);
-    Mat src = imread(out_path);
-    src = image_cut(src);
-    imwrite(result_path, src);
-
-    Mat grad_x, grad_y;
-    Mat abs_grad_x,abs_grad_y;
-    Mat grad;
-    int scale = 1;
-    int delta = 0;
-    int ddepth = CV_16U;
-
-
-    Scharr( src, grad_x, ddepth, 1, 0, scale, delta, BORDER_DEFAULT );
-    convertScaleAbs( grad_x, abs_grad_x );
-
-    Scharr( src, grad_y, ddepth, 0, 1, scale, delta, BORDER_DEFAULT );
-    convertScaleAbs( grad_y, abs_grad_y );
-
-    addWeighted( abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad );
-
-    imshow("grad window", grad );
+int main (int argc, char** argv) {
+    // --------------- read filename strings ------------------
+    std::string colorFilename, maskFilename;
     
-    waitKey(0);
-
-
+    if (argc == 3) {
+        colorFilename = argv[1];
+        maskFilename = argv[2];
+    } else {
+        std::cerr << "Usage: ./inpainting colorImageFile maskImageFile" << std::endl;
+        return -1;
+    }
+    
+    // ---------------- read the images ------------------------
+    // colorMat     - color picture + border
+    // maskMat      - mask picture + border
+    // grayMat      - gray picture + border
+    cv::Mat colorMat, maskMat, grayMat;
+    loadInpaintingImages(
+                         colorFilename,
+                         maskFilename,
+                         colorMat,
+                         maskMat,
+                         grayMat
+                         );
+    
+    // confidenceMat - confidence picture + border
+    cv::Mat confidenceMat;
+    maskMat.convertTo(confidenceMat, CV_32F);
+    confidenceMat /= 255.0f;
+    
+    // add borders around maskMat and confidenceMat
+    cv::copyMakeBorder(maskMat, maskMat,
+                       RADIUS, RADIUS, RADIUS, RADIUS,
+                       cv::BORDER_CONSTANT, 255);
+    cv::copyMakeBorder(confidenceMat, confidenceMat,
+                       RADIUS, RADIUS, RADIUS, RADIUS,
+                       cv::BORDER_CONSTANT, 0.0001f);
+    
+    // ---------------- start the algorithm -----------------
+    
+    contours_t contours;            // mask contours
+    hierarchy_t hierarchy;          // contours hierarchy
+    
+    
+    // priorityMat - priority values for all contour points + border
+    cv::Mat priorityMat(
+                        confidenceMat.size(),
+                        CV_32FC1
+                        );  // priority value matrix for each contour point
+    
+    assert(
+           colorMat.size() == grayMat.size() &&
+           colorMat.size() == confidenceMat.size() &&
+           colorMat.size() == maskMat.size()
+           );
+    
+    cv::Point psiHatP;          // psiHatP - point of highest confidence
+    
+    cv::Mat psiHatPColor;       // color patch around psiHatP
+    
+    cv::Mat psiHatPConfidence;  // confidence patch around psiHatP
+    double confidence;          // confidence of psiHatPConfidence
+    
+    cv::Point psiHatQ;          // psiHatQ - point of closest patch
+    
+    cv::Mat result;             // holds result from template matching
+    cv::Mat erodedMask;         // eroded mask
+    
+    cv::Mat templateMask;       // mask for template match (3 channel)
+    
+    // eroded mask is used to ensure that psiHatQ is not overlapping with target
+    cv::erode(maskMat, erodedMask, cv::Mat(), cv::Point(-1, -1), RADIUS);
+    
+    cv::Mat drawMat;
+    
+    
+    // main loop
+    const size_t area = maskMat.total();
+    
+    while (cv::countNonZero(maskMat) != area)   // end when target is filled
+    {
+        // set priority matrix to -.1, lower than 0 so that border area is never selected
+        priorityMat.setTo(-0.1f);
+        
+        // get the contours of mask
+        getContours((maskMat == 0), contours, hierarchy);
+        
+        if (DEBUG) {
+            drawMat = colorMat.clone();
+        }
+        
+        // compute the priority for all contour points
+        computePriority(contours, grayMat, confidenceMat, priorityMat);
+        
+        // get the patch with the greatest priority
+        cv::minMaxLoc(priorityMat, NULL, NULL, NULL, &psiHatP);
+        psiHatPColor = getPatch(colorMat, psiHatP);
+        psiHatPConfidence = getPatch(confidenceMat, psiHatP);
+        
+        cv::Mat confInv = (psiHatPConfidence != 0.0f);
+        confInv.convertTo(confInv, CV_16UC1);
+        confInv /= 255.0f;
+        // get the patch in source with least distance to psiHatPColor wrt source of psiHatP
+        cv::Mat mergeArrays[3] = {confInv, confInv, confInv};
+        cv::merge(mergeArrays, 3, templateMask);
+        result = computeSSD(psiHatPColor, colorMat, templateMask);
+        
+        // set all target regions to 1.1, which is over the maximum value possilbe
+        // from SSD
+        result.setTo(1.1f, erodedMask == 0);
+        // get minimum point of SSD between psiHatPColor and colorMat
+        cv::minMaxLoc(result, NULL, NULL, &psiHatQ);
+        
+        assert(psiHatQ != psiHatP);
+        
+        if (DEBUG) {
+            cv::rectangle(drawMat, psiHatP - cv::Point(RADIUS, RADIUS), psiHatP + cv::Point(RADIUS+1, RADIUS+1), cv::Scalar(255, 0, 0));
+            cv::rectangle(drawMat, psiHatQ - cv::Point(RADIUS, RADIUS), psiHatQ + cv::Point(RADIUS+1, RADIUS+1), cv::Scalar(0, 0, 255));
+            showMat("red - psiHatQ", drawMat);
+        }
+        // updates
+        // copy from psiHatQ to psiHatP for each colorspace
+        transferPatch(psiHatQ, psiHatP, grayMat, (maskMat == 0));
+        transferPatch(psiHatQ, psiHatP, colorMat, (maskMat == 0));
+        
+        // fill in confidenceMat with confidences C(pixel) = C(psiHatP)
+        confidence = computeConfidence(psiHatPConfidence);
+        assert(0 <= confidence && confidence <= 1.0f);
+        // update confidence
+        psiHatPConfidence.setTo(confidence, (psiHatPConfidence == 0.0f));
+        // update maskMat
+        maskMat = (confidenceMat != 0.0f);
+    }
+    
+    showMat("final result", colorMat, 0);
     return 0;
 }
 
 /*
+//Image Edit
 int main(){
-    string x_ori;
-    string y_ori;
-    string z_ori;
-    x_ori = "1.7018";
-    y_ori = "-5.6369";
-    z_ori = "-4.6918";
-    double max = 16.2828;
-    double min = 4.2828;
-    const double pi = atan(1)*4;
-    double y = stod(x_ori);
-    double z = stod(y_ori);
-    double x = stod(z_ori);
-    double depth = sqrt(x*x+ y*y +z*z);
+    string path="/Users/estelle/Project/3DFaceReconstruction/final_gradient_test_result.png";
+    string out_path="/Users/estelle/Project/3DFaceReconstruction/mask.png";
     
-    int x_map = round(atan((-x)/y)*2/pi*180)+540;
-    int y_map = 360- round(asin(sqrt(x*x+y*y)/depth)*2/pi*180);
-    depth = round(255.0*(depth- min)/(max - min));
-    depth = depth*(max - min)/255+min;
+    Mat image = imread(path,CV_16UC1);
+    Mat out_image = image.clone();
+    int rows = out_image.rows;
+    int cols = out_image.cols;
+
+    for (int i=0;i<rows;i++){
+        int startPoint=-1;//depth info
+        int endPoint=-1;
+        int startcols=-1;//position
+        int endcols=-1;
+        for (int j=0;j<cols;j++){
+            unsigned short int start = (unsigned short int) image.at<ushort>(i,j);
+            if(start != 0){
+                startPoint = start;
+                startcols = j+5;
+                for (int x=cols-1;x>=j;x--){
+                    unsigned short int end = (unsigned short int) image.at<ushort>(i,x);
+                    if (end != 0){
+                        endPoint = end;
+                        endcols = x;
+                        break;
+                    }
+                }
+                break;
+            }
+        }
+
+        if(startcols!=-1 && endcols!=-1){
+
+            for (int m=0;m<=startcols;m++){
+                double temp=0.0;
+                out_image.at<ushort>(i,m) = temp;
+            }
+            for (int n=endcols;n<cols;n++){
+                double black=0.0;
+                out_image.at<ushort>(i,n) = black;
+            }
+            for (int p = endcols; p>startcols;p--){
+                double white=65535.0;
+                out_image.at<ushort>(i,p) = white;
+            }
+        }
+    }
+//    for (int i=0;i<rows;i++){
+//        for (int j=0;j<cols;j++){
+//            unsigned short int current = (unsigned short int) out_image.at<ushort>(i,j);
+//            out_image.at<ushort>(i,j) = (unsigned short int)65535-current;
+//        }
+//    }
     
-    double x_3d;
-    double y_3d;
-    double z_3d;
-    y_3d = - depth*cos((360-y_map)*pi/360);
-    z_3d = - depth*sin((360-y_map)*pi/360)*sin((x_map-540)*pi/360);
-    x_3d = depth*sin((360-y_map)*pi/360)*cos((x_map-540)*pi/360);
-    
-    //depth = depth*(max - min)/255+min;
-    //y_3d = -sqrt(depth*depth - x_3d*x_3d - z_3d*z_3d);
-    //cout << depth<<endl;
-    cout << x_3d<<endl;
-    cout << y_3d<<endl;
-    cout << z_3d<<endl;
+    namedWindow("display window",WINDOW_AUTOSIZE);
+    imshow("display window", out_image);
+    imwrite(out_path, out_image);
+    //waitKey();
     return 0;
 }
 */
-
-/****************************************************************************************
- * Use 10*10 sphere to test
- 
-int main(){
-    int rows=360;
-    int cols=720;
-    Mat image(rows,cols,CV_8UC3,cv::Scalar::all(0));
-    for (int i=0;i<rows;i++){
-        for (int j=0;j<cols;j++){
-            image.at<Vec3b>(i,j)[0]=150;
-            image.at<Vec3b>(i,j)[1]=150;
-            image.at<Vec3b>(i,j)[2]=150;
-        }
-    }
-    string path = "/Users/estelle/Documents/faceFitResult/2D_Transformation/test_depth_map.bmp";
-    namedWindow("Display Window",WINDOW_AUTOSIZE);
-    imshow("Display Window",image);
-    //waitKey(0);
-    imwrite(path, image);
-    
-    recons_3D(path);
-    return 0;
-}
- *****************************************************************************************/
-
